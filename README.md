@@ -10,12 +10,18 @@
 
 ## 🚀 不會寫程式?最簡單的用法
 
-1. 安裝 [Claude Code](https://claude.com/claude-code)(桌面版 App 即可)
+> ⚠️ **一定要用 Claude Code(「Code」那邊),不能用一般的 Claude 網頁聊天**。
+> 剪片需要在你電腦上跑程式和讀影片檔,只有 Claude Code 做得到;
+> 一般 chatbot(claude.ai 的 Chat / Home)碰不到你的本機檔案。
+
+1. 安裝 [Claude Code](https://claude.com/claude-code)(桌面版 App 即可),或在 Claude 桌面 App 裡**切到 Code 分頁**
 2. 開新對話,直接跟 Claude 說:
 
    > 幫我安裝這個工具:https://github.com/bheadwei/autoclip ,照 README 把環境、字體、skill 都裝好
 
 3. 裝好之後,丟影片給 Claude 說「**幫我剪這支,主題是…**」就會拿到成品;想微調就說「**開編輯器**」
+
+之後每次要剪片,同樣**開 Claude Code 的新對話**就行(不用指定資料夾)。
 
 下面的手動安裝步驟看不懂沒關係,全部都可以叫 Claude 代勞。
 
