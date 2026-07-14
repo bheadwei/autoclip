@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<title>autoclip 編輯器</title>
+<style>
+@font-face { font-family:'GSR-B'; src:url('/fonts/GenSenRounded2TW-B.otf') format('opentype'); }
+@font-face { font-family:'GSR-H'; src:url('/fonts/GenSenRounded2TW-H.otf') format('opentype'); }
+* { box-sizing:border-box; }
+body { margin:0; background:#14161a; color:#dde2ea; font:14px/1.5 "Segoe UI","Microsoft JhengHei",sans-serif; }
+header { display:flex; gap:10px; align-items:center; padding:8px 14px; background:#1d2026; border-bottom:1px solid #2c3038; }
+header h1 { font-size:15px; margin:0 12px 0 0; color:#4ea1ff; }
+select,input,button { background:#262a32; color:#dde2ea; border:1px solid #3a3f49; border-radius:6px; padding:4px 8px; font:inherit; }
+input[type=number] { width:72px; }
+input[type=range] { padding:0; }
+button { cursor:pointer; }
+button:hover { border-color:#4ea1ff; }
+button.primary { background:#2563b0; border-color:#2f7ad6; }
+button.small { padding:1px 7px; font-size:12px; }
+#main { display:grid; grid-template-columns:1fr 400px; gap:10px; padding:10px 14px 0; }
+#videocol { display:flex; flex-direction:column; align-items:center; gap:6px; min-width:0; }
+#wrap { position:relative; display:inline-block; background:#000; }
+video#vid { display:block; max-height:calc(100vh - 320px); max-width:100%; }
+#ovl { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
+#cap { position:absolute; left:0; right:0; bottom:21.9%; text-align:center; font-family:'GSR-B'; color:#fff;
+  text-shadow:0 3px 8px rgba(0,0,0,.75), 0 1px 3px rgba(0,0,0,.9); pointer-events:none; white-space:nowrap; }
+.sfx { position:absolute; font-family:'GSR-H'; color:#fff; white-space:nowrap; pointer-events:auto; cursor:grab;
+  line-height:1.15; text-align:center;
+  text-shadow:0 3px 8px rgba(0,0,0,.75), 0 1px 3px rgba(0,0,0,.9); }
+.sfx:active { cursor:grabbing; }
+.sfx.sel { outline:2px dashed rgba(78,161,255,.9); outline-offset:5px; }
+#gv { position:absolute; left:50%; top:0; bottom:0; border-left:2px dashed #ff5bd2; display:none; pointer-events:none; }
+#gh { position:absolute; top:50%; left:0; right:0; border-top:2px dashed #ff5bd2; display:none; pointer-events:none; }
+.sfx>span { display:inline-block; animation:pop .22s ease-out; }
+@keyframes pop { 0%{transform:scale(.35);opacity:0} 60%{transform:scale(1.3)} 100%{transform:scale(1)} }
+#panel { background:#1d2026; border:1px solid #2c3038; border-radius:8px; display:flex; flex-direction:column; overflow:hidden; max-height:calc(100vh - 300px); }
+#tabs { display:flex; border-bottom:1px solid #2c3038; }
+#tabs div { padding:8px 14px; cursor:pointer; color:#9aa3b0; }
+#tabs div.on { color:#fff; border-bottom:2px solid #4ea1ff; }
+#tabbody { padding:10px; overflow-y:auto; }
+.row { display:flex; gap:5px; align-items:center; margin-bottom:6px; flex-wrap:wrap; }
+.row .idx { color:#788; width:18px; }
+.muted { color:#8b94a1; font-size:12px; }
+#tlbox { padding:6px 14px 12px; }
+#tlbar { display:flex; gap:12px; align-items:center; margin-bottom:4px; }
+#tlscroll { overflow-x:auto; border:1px solid #2c3038; border-radius:6px; background:#181b20; }
+canvas#tl { display:block; }
+#toast { position:fixed; top:14px; right:16px; background:#2563b0; color:#fff; padding:8px 16px; border-radius:8px; opacity:0; transition:opacity .3s; pointer-events:none; z-index:9; }
+pre#rlog { background:#11141a; padding:8px; border-radius:6px; font-size:11px; max-height:150px; overflow:auto; white-space:pre-wrap; }
+.outvid { width:150px; display:block; border-radius:6px; margin-top:4px; }
+.linelist { font-size:12px; color:#9aa3b0; margin-top:8px; border-top:1px solid #2c3038; padding-top:6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>autoclip 編輯器</h1>
+  任務 <select id="jobsel"></select>
+  片段組 <select id="clipsel"></select>
+  <button id="clipadd" class="small" title="新增片段組">＋組</button>
+  <button id="clipdel" class="small" title="刪除目前片段組">刪組</button>
+  <button id="undobtn" title="復原 (Ctrl+Z)">↶</button>
+  <button id="redobtn" title="重做 (Ctrl+Y)">↷</button>
+  <button id="save" class="primary">💾 儲存 (Ctrl+S)</button>
+  <span id="timeinfo" class="muted"></span>
+  <span class="muted" style="margin-left:auto">space 播放 · ←→ 微調 0.05s(Shift=1s) · I/O 設起訖 · Ctrl+Z 復原</span>
+</header>
+
+<div id="main">
+  <div id="videocol">
+    <div id="wrap">
+      <video id="vid"></video>
+      <div id="ovl"><div id="cap"></div><div id="sfxlayer"></div><div id="gv"></div><div id="gh"></div></div>
+    </div>
+    <div class="row">
+      <button id="playbtn">⏯ 播放</button>
+      <label><input type="checkbox" id="playparts"> 成片預覽（跳過剪掉的部分）</label>
+      <span id="cliplen" class="muted"></span>
+    </div>
+  </div>
+  <div id="panel">
+    <div id="tabs">
+      <div data-t="parts" class="on">片段</div><div data-t="words">字幕</div>
+      <div data-t="out">輸出</div>
+    </div>
+    <div id="tabbody"></div>
+  </div>
+</div>
+
+<div id="tlbox">
+  <div id="tlbar">
+    <b>時間軸</b>
+    <button class="small" id="zi">＋</button><button class="small" id="zo">－</button>
+    <span class="muted">拖拉藍色區塊邊緣調整起訖・拖中間整段移動・點空白處跳轉</span>
+  </div>
+  <div id="tlscroll"><canvas id="tl" height="112"></canvas></div>
+</div>
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const vid = $('#vid'), ovl = $('#ovl'), cap = $('#cap'), sfxlayer = $('#sfxlayer');
+const tl = $('#tl'), ctx = tl.getContext('2d'), tls = $('#tlscroll');
+const S = { job:null, data:null, ci:0, selPart:0, selSfx:-1, lines:[], words:[],
+            pps:30, dur:0, drag:null, tab:'parts', polling:null };
+
+const fmt = t => { t=Math.max(0,t); const m=Math.floor(t/60), s=(t%60).toFixed(2); return m+':'+String(s).padStart(5,'0'); };
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const r2 = x => Math.round(x*100)/100;
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.style.opacity=1; setTimeout(()=>t.style.opacity=0,1600); }
+function clip(){ return S.data.clips[S.ci]; }
+
+// ---------- undo / redo ----------
+S.hist=[]; S.redoStack=[];
+const stateStr = ()=>JSON.stringify({c:S.data.clips, t:S.data.transcript, ci:S.ci});
+function snap(){ const s=stateStr(); if(S.hist[S.hist.length-1]!==s){ S.hist.push(s); if(S.hist.length>80) S.hist.shift(); S.redoStack=[]; } }
+function applyState(str){
+  const o=JSON.parse(str);
+  S.data.clips=o.c; S.data.transcript=o.t;
+  S.ci=Math.min(o.ci??0, o.c.length-1); S.selPart=0; S.selSfx=-1;
+  flattenWords(); computeLines(); rebuildClipSel(); renderPanel();
+}
+function undo(){ if(!S.hist.length){ toast('沒有可復原的步驟'); return; } S.redoStack.push(stateStr()); applyState(S.hist.pop()); toast('已復原 ↶'); }
+function redoFn(){ if(!S.redoStack.length){ toast('沒有可重做的步驟'); return; } S.hist.push(stateStr()); applyState(S.redoStack.pop()); toast('已重做 ↷'); }
+function rebuildClipSel(){
+  $('#clipsel').innerHTML = S.data.clips.map((c,i)=>`<option value="${i}" ${i===S.ci?'selected':''}>${c.slug}</option>`).join('');
+}
+
+// ---------- load ----------
+async function init(){
+  try{ S.fontList = await (await fetch('/api/fonts')).json(); }catch(e){ S.fontList=[]; }
+  const jobs = await (await fetch('/api/jobs')).json();
+  $('#jobsel').innerHTML = jobs.map(j=>`<option>${j}</option>`).join('');
+  $('#jobsel').onchange = ()=>loadJob($('#jobsel').value);
+  if (jobs.length) loadJob(jobs[0]);
+}
+S.fontCss = {};
+function ensureFont(full){
+  if (S.fontCss[full] !== undefined) return S.fontCss[full] || null;
+  S.fontCss[full] = '';
+  const f = (S.fontList||[]).find(x=>x.full===full);
+  if (!f){ S.fontCss[full] = null; return null; }
+  const ff = new FontFace(full, `url(/fonts/${encodeURIComponent(f.file)})`);
+  ff.load().then(()=>{ document.fonts.add(ff); S.fontCss[full]=full; }).catch(()=>{ S.fontCss[full]=null; });
+  return null;
+}
+function startSfxDrag(ev, idx){
+  ev.preventDefault();
+  snap(); S.selSfx = idx; if (S.tab==='words') renderPanel();
+  const s = clip().sfx[idx], r = ovl.getBoundingClientRect();
+  const move = e=>{
+    let nx=(e.clientX-r.left)/r.width, ny=(e.clientY-r.top)/r.height;
+    const sx=Math.abs(nx-0.5)<0.02, sy=Math.abs(ny-0.5)<0.02;   // snap to center guides
+    if (sx) nx=0.5; if (sy) ny=0.5;
+    $('#gv').style.display = sx?'block':'none';
+    $('#gh').style.display = sy?'block':'none';
+    s.x = r2(Math.max(0.02,Math.min(0.98,nx)));
+    s.y = r2(Math.max(0.02,Math.min(0.98,ny)));
+  };
+  const up = ()=>{
+    window.removeEventListener('mousemove',move);
+    $('#gv').style.display='none'; $('#gh').style.display='none';
+    renderPanel();
+  };
+  window.addEventListener('mousemove',move);
+  window.addEventListener('mouseup',up,{once:true});
+}
+async function loadFont(name, file){
+  try{ const ff = new FontFace(name, `url(/fonts/${file})`); await ff.load(); document.fonts.add(ff); return name; }
+  catch(e){ return null; }
+}
+async function loadJob(name){
+  S.job = name;
+  S.data = await (await fetch('/api/job/'+name)).json();
+  S.style = Object.assign({outline:0, shadow:4}, S.data.job?.style||{});
+  S.fonts = {cap:'GSR-B', sfx:'GSR-H'};
+  if (S.style.dialog_font_file) S.fonts.cap = (await loadFont('JOBCAP', S.style.dialog_font_file)) || 'GSR-B';
+  if (S.style.sfx_font_file) S.fonts.sfx = (await loadFont('JOBSFX', S.style.sfx_font_file)) || 'GSR-H';
+  S.data.clips.forEach(c=>{ if(!c.parts) c.parts=[[c.start,c.end]]; delete c.start; delete c.end; if(!c.sfx) c.sfx=[]; });
+  S.ci=0; S.selPart=0; S.selSfx=-1; S.hist=[]; S.redoStack=[];
+  rebuildClipSel();
+  $('#clipsel').onchange = ()=>{ S.ci=+$('#clipsel').value; S.selPart=0; S.selSfx=-1; renderPanel(); };
+  flattenWords(); computeLines();
+  vid.src = '/video/'+name;
+  vid.onloadedmetadata = ()=>{ S.dur = vid.duration; sizeTl(); renderPanel(); };
+  renderPanel();
+}
+function flattenWords(){
+  S.words = [];
+  (S.data.transcript?.segments||[]).forEach(seg => seg.words.forEach(w => S.words.push(w)));
+  S.words.sort((a,b)=>a.start-b.start);
+}
+function computeLines(){  // mirror render.py chunk_lines
+  const MAXC=10, GAP=0.8; S.lines=[]; let cur=[], chars=0;
+  for (const w of S.words){
+    const t=w.word.trim(); if(!t) continue;
+    if (cur.length && (chars+t.length>MAXC || w.start-cur[cur.length-1].end>GAP)){ pushLine(cur); cur=[]; chars=0; }
+    cur.push(w); chars+=t.length;
+  }
+  if (cur.length) pushLine(cur);
+  function pushLine(ws){ S.lines.push({start:ws[0].start, end:ws[ws.length-1].end+0.15, text:ws.map(w=>w.word.trim()).join('')}); }
+}
+
+// ---------- overlay preview ----------
+function drawOverlay(){
+  const t = vid.currentTime, H = ovl.clientHeight;
+  const line = S.lines.find(l=>t>=l.start && t<=l.end);
+  cap.style.fontSize = (H*(S.style?.fontsize||88)/1920)+'px';
+  cap.style.fontFamily = S.fonts?.cap||'GSR-B';
+  cap.style.webkitTextStroke = S.style?.outline ? (H*S.style.outline/1920*1.6)+'px #000' : '';
+  cap.style.paintOrder = 'stroke fill';
+  cap.textContent = line ? line.text : '';
+  const act = (clip()?.sfx||[]).map((s,i)=>({s,i})).filter(o=>t>=o.s.start && t<=o.s.end);
+  for (const el of [...sfxlayer.children]) if (!act.some(o=>'sfx'+o.i===el.id)) el.remove();
+  for (const {s,i} of act){
+    let el = document.getElementById('sfx'+i);
+    if (!el){ el = document.createElement('div'); el.id='sfx'+i; el.className='sfx'; el.innerHTML='<span></span>';
+      el.onmousedown = ev=>startSfxDrag(ev, +el.id.slice(3));
+      sfxlayer.appendChild(el); }
+    el.classList.toggle('sel', i===S.selSfx);
+    el.style.left = (s.x*100)+'%'; el.style.top = (s.y*100)+'%';
+    el.style.transform = `translate(-50%,-50%) rotate(${s.angle||0}deg)`;
+    el.style.fontSize = (H*(S.style?.sfx_size||130)/1920*(s.scale||1))+'px';
+    el.style.color = s.color||'#fff';
+    el.style.fontFamily = (s.font && ensureFont(s.font)) ? `'${s.font}'` : (S.fonts?.sfx||'GSR-H');
+    el.style.webkitTextStroke = S.style?.outline ? (H*S.style.outline/1920*1.6)+'px #000' : '';
+    el.style.paintOrder = 'stroke fill';
+    el.firstChild.innerHTML = esc(s.text).replace(/\\N/gi,'<br>');
+    el.firstChild.style.textAlign = 'center';
+  }
+}
+
+// ---------- timeline ----------
+function sizeTl(){ tl.width = Math.max(tls.clientWidth-2, S.dur*S.pps); }
+function sfxLanes(sf){
+  // stack overlapping subtitle bars into separate lanes
+  const laneEnd=[], lane=[];
+  sf.map((s,i)=>i).sort((a,b)=>sf[a].start-sf[b].start).forEach(i=>{
+    let l=0;
+    while(laneEnd[l]!==undefined && laneEnd[l] > sf[i].start+0.01) l++;
+    laneEnd[l]=sf[i].end; lane[i]=l;
+  });
+  return {lane, n: Math.max(laneEnd.length,1)};
+}
+function drawTl(){
+  const sf = clip()?.sfx||[];
+  const L = sfxLanes(sf);
+  const wordsY = 72 + L.n*18 + 4;
+  const H = wordsY + 22;
+  if (tl.height !== H) tl.height = H;
+  const W=tl.width, pps=W/Math.max(S.dur,0.01);
+  ctx.clearRect(0,0,W,H); ctx.font='10px sans-serif';
+  const step = pps>60?1:pps>25?2:5;
+  for(let s=0;s<=S.dur;s+=step){ const x=s*pps; ctx.strokeStyle='#2c3038'; ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); ctx.fillStyle='#788'; ctx.fillText(fmt(s).replace('.00',''),x+2,10); }
+  ctx.fillStyle='#39424e'; for(const w of S.words){ ctx.fillRect(w.start*pps, wordsY, Math.max((w.end-w.start)*pps,1.5), 14); }
+  (clip()?.parts||[]).forEach((p,i)=>{
+    const x=p[0]*pps, w=(p[1]-p[0])*pps;
+    ctx.fillStyle = i===S.selPart?'rgba(78,161,255,.45)':'rgba(78,161,255,.25)';
+    ctx.fillRect(x,22,w,44);
+    ctx.strokeStyle = i===S.selPart?'#8fc4ff':'#4ea1ff'; ctx.strokeRect(x,22,w,44);
+    ctx.fillStyle='#8fc4ff'; ctx.fillRect(x-1,22,3,44); ctx.fillRect(x+w-2,22,3,44);
+    ctx.fillStyle='#cfe6ff'; ctx.fillText((i+1)+' '+(p[1]-p[0]).toFixed(1)+'s', x+4, 36);
+  });
+  sf.forEach((s,i)=>{
+    const x=s.start*pps, w=Math.max((s.end-s.start)*pps,8), y=72+L.lane[i]*18;
+    ctx.fillStyle = i===S.selSfx?'#ffd24e':'rgba(255,210,78,.55)';
+    ctx.fillRect(x,y,w,14);
+    ctx.fillStyle = i===S.selSfx?'#b8860b':'rgba(184,134,11,.9)';
+    ctx.fillRect(x,y,3,14); ctx.fillRect(x+w-3,y,3,14);
+    ctx.fillStyle='#1d2026'; ctx.fillText(s.text.replace(/\\N/gi,' '),x+5,y+11);
+  });
+  const px = vid.currentTime*pps;
+  ctx.strokeStyle='#ff5b5b'; ctx.beginPath(); ctx.moveTo(px,0); ctx.lineTo(px,H); ctx.stroke();
+}
+tl.onmousedown = e=>{
+  const rect=tl.getBoundingClientRect(), x=e.clientX-rect.left, y=e.clientY-rect.top;
+  const pps=tl.width/S.dur, t=x/pps, ps=clip().parts;
+  for(let i=0;i<ps.length;i++){
+    const x0=ps[i][0]*pps, x1=ps[i][1]*pps;
+    if (y>=22&&y<=66){
+      if (Math.abs(x-x0)<5){ snap(); S.drag={t:'edge',i,side:0}; S.selPart=i; return; }
+      if (Math.abs(x-x1)<5){ snap(); S.drag={t:'edge',i,side:1}; S.selPart=i; return; }
+      if (x>x0&&x<x1){ snap(); S.drag={t:'move',i,off:t-ps[i][0]}; S.selPart=i; renderPanel(); return; }
+    }
+  }
+  const sf=clip().sfx, L=sfxLanes(sf);
+  for(let i=0;i<sf.length;i++){
+    const x0=sf[i].start*pps, x1=Math.max(sf[i].end*pps,x0+8), y0=72+L.lane[i]*18;
+    if (y>=y0-2&&y<=y0+16){
+      if (Math.abs(x-x0)<5){ snap(); S.drag={t:'sfxedge',i,side:0}; S.selSfx=i; if(S.tab==='words')renderPanel(); return; }
+      if (Math.abs(x-x1)<5){ snap(); S.drag={t:'sfxedge',i,side:1}; S.selSfx=i; if(S.tab==='words')renderPanel(); return; }
+      if (x>x0&&x<x1){ snap(); S.drag={t:'sfx',i,off:t-sf[i].start}; S.selSfx=i; if(S.tab==='words')renderPanel(); return; }
+    }
+  }
+  vid.currentTime = Math.max(0,Math.min(t,S.dur));
+};
+window.onmousemove = e=>{
+  if(!S.drag) return;
+  const rect=tl.getBoundingClientRect(), pps=tl.width/S.dur;
+  let t = Math.max(0,Math.min((e.clientX-rect.left)/pps, S.dur));
+  const d=S.drag, ps=clip().parts;
+  if (d.t==='edge'){ ps[d.i][d.side]=r2(t); if(ps[d.i][0]>ps[d.i][1]-0.2) ps[d.i][d.side]=d.side?ps[d.i][0]+0.2:ps[d.i][1]-0.2; }
+  if (d.t==='move'){ const len=ps[d.i][1]-ps[d.i][0]; ps[d.i][0]=r2(Math.max(0,Math.min(t-d.off,S.dur-len))); ps[d.i][1]=r2(ps[d.i][0]+len); }
+  if (d.t==='sfx'){ const s=clip().sfx[d.i], len=s.end-s.start; s.start=r2(Math.max(0,t-d.off)); s.end=r2(s.start+len); }
+  if (d.t==='sfxedge'){ const s=clip().sfx[d.i];
+    if(d.side===0) s.start=r2(Math.min(t, s.end-0.2)); else s.end=r2(Math.max(t, s.start+0.2)); }
+};
+window.onmouseup = ()=>{ if(S.drag){ S.drag=null; renderPanel(); } };
+$('#zi').onclick=()=>{ S.pps=Math.min(S.pps*1.5,400); sizeTl(); };
+$('#zo').onclick=()=>{ S.pps=Math.max(S.pps/1.5,5); sizeTl(); };
+
+// ---------- panel ----------
+document.querySelectorAll('#tabs div').forEach(el=>el.onclick=()=>{ S.tab=el.dataset.t;
+  document.querySelectorAll('#tabs div').forEach(x=>x.classList.toggle('on',x===el)); renderPanel(); });
+
+function renderPanel(){
+  const c = clip(); if(!c) return;
+  const B = $('#tabbody');
+  $('#cliplen').textContent = '成片長度 '+ c.parts.reduce((a,p)=>a+p[1]-p[0],0).toFixed(1)+'s';
+  if (S.tab==='parts'){
+    B.innerHTML = `<div class="row">代號 <input id="slug" value="${c.slug}" style="width:110px">
+      標題 <input id="title" value="${c.title||''}" style="flex:1"></div>` +
+      c.parts.map((p,i)=>`<div class="row"><span class="idx">${i+1}</span>
+        <input type="number" step="0.05" value="${p[0]}" data-p="${i},0">
+        <input type="number" step="0.05" value="${p[1]}" data-p="${i},1">
+        <span class="muted">${(p[1]-p[0]).toFixed(1)}s</span>
+        <button class="small" data-act="play,${i}" title="從此片段播放">⏵</button>
+        <button class="small" data-act="in,${i}" title="起點=播放頭">I</button>
+        <button class="small" data-act="out,${i}" title="終點=播放頭">O</button>
+        <button class="small" data-act="del,${i}">✕</button></div>`).join('') +
+      `<div class="row"><button data-act="add">＋在播放頭新增片段</button>
+       <button data-act="sort">依時間排序</button></div>
+       <div class="muted">提示:多個片段輸出時會依列表順序接成一支影片</div>`;
+    $('#slug').onchange=e=>c.slug=e.target.value;
+    $('#title').onchange=e=>c.title=e.target.value;
+  }
+  if (S.tab==='words'){
+    const wordRows = S.words.length ?
+      S.words.map((w,i)=>`<div class="row"><input value="${w.word.trim()}" style="width:84px" data-w="${i},word">
+        <input type="number" step="0.05" value="${w.start}" data-w="${i},start">
+        <input type="number" step="0.05" value="${w.end}" data-w="${i},end">
+        <button class="small" data-act="wplay,${i}">⏵</button>
+        <button class="small" data-act="wdel,${i}">✕</button></div>`).join('')
+      : `<div class="muted" style="margin-bottom:6px">(這支影片沒有辨識到語音)</div>`;
+    const linePreview = S.lines.length ?
+      `<div class="linelist"><b>分行預覽</b><br>` +
+      S.lines.map(l=>`${fmt(l.start)}–${fmt(l.end)} ${l.text}`).join('<br>')+`</div>` : '';
+    const fontOpts = f => `<option value="">預設字體</option>` +
+      (S.fontList||[]).map(o=>`<option value="${o.full}" ${f===o.full?'selected':''}>${o.full}</option>`).join('');
+    const sfxRows = c.sfx.map((s,i)=>`<div class="row" style="border-left:3px solid ${i===S.selSfx?'#ffd24e':'transparent'};padding-left:5px">
+        <input value="${s.text}" style="width:130px" data-s="${i},text" title="文字,打 \\N 換行">
+        <input type="color" value="${s.color||'#ffffff'}" data-s="${i},color" title="顏色" style="width:34px;padding:1px">
+        <select data-s="${i},font" title="字體" style="max-width:170px">${fontOpts(s.font)}</select><br>
+        <input type="number" step="0.05" value="${s.start}" data-s="${i},start" title="開始(秒)">
+        <input type="number" step="0.05" value="${s.end}" data-s="${i},end" title="結束(秒)">
+        <button class="small" data-act="scenter,${i}" title="水平置中 (x=50%)">⇔ 置中</button>
+        <button class="small" data-act="splay,${i}" title="從此播放">⏵</button>
+        <button class="small" data-act="sdel,${i}">✕</button><br>
+        <label class="muted">大小 <input type="range" min="0.5" max="2.5" step="0.05" value="${s.scale||1}" data-s="${i},scale">
+          <input type="number" min="0.5" max="2.5" step="0.05" value="${s.scale||1}" data-s="${i},scale" style="width:58px">x</label>
+        <label class="muted">角度 <input type="range" min="-45" max="45" step="1" value="${s.angle||0}" data-s="${i},angle">
+          <input type="number" min="-45" max="45" step="1" value="${s.angle||0}" data-s="${i},angle" style="width:52px">°</label>
+      </div>`).join('');
+    B.innerHTML =
+      `<div style="margin-bottom:4px"><b>語音字幕(逐字)</b> <span class="muted">改字/改時間影響所有片段組;刪字只是不顯示,聲音要靠片段區間移除</span></div>` +
+      wordRows + linePreview +
+      `<div style="margin:14px 0 4px;border-top:1px solid #2c3038;padding-top:10px"><b>手動字幕(狀聲詞/字卡)</b> <span class="muted">屬於目前片段組;文字裡打 \\N 會換行</span></div>` +
+      sfxRows +
+      `<div class="row"><button data-act="sadd">＋在播放頭新增手動字幕</button></div>
+       <div class="muted">💡 直接在影片畫面上<b>拖曳字幕</b>調位置,靠近中線會自動吸附(粉紅輔助線);點一下字幕即可選取</div>`;
+  }
+  if (S.tab==='out'){
+    const outs = (S.data.outputs||[]).map(o=>`<div class="row"><div>
+        <a href="/jobs/${S.job}/out/${o.file}" target="_blank">${o.file}</a>
+        <span class="muted">${(o.size/1048576).toFixed(1)}MB</span>
+        <video class="outvid" controls preload="metadata" src="/jobs/${S.job}/out/${o.file}?v=${o.mtime}"></video>
+      </div></div>`).join('');
+    B.innerHTML = `<div class="row"><label><input type="checkbox" id="vert" ${S.data.job?.vertical!==false?'checked':''}> 直式 9:16 輸出</label>
+      <button id="renderbtn" class="primary">🎬 儲存並渲染</button></div>
+      <pre id="rlog"></pre><div><b>輸出檔</b>${outs||'<span class="muted"> (尚無)</span>'}</div>`;
+    $('#renderbtn').onclick = startRender;
+  }
+  B.querySelectorAll('input').forEach(el=>el.addEventListener('focus',()=>snap()));
+  B.querySelectorAll('[data-p]').forEach(el=>el.onchange=()=>{ const [i,k]=el.dataset.p.split(','); c.parts[+i][+k]=+el.value; });
+  B.querySelectorAll('[data-w]').forEach(el=>el.onchange=()=>{ const [i,k]=el.dataset.w.split(','); const w=S.words[+i];
+    if(k==='word') w.word=el.value; else w[k]=+el.value; computeLines(); if(S.tab==='words')renderPanel(); });
+  B.querySelectorAll('[data-s]').forEach(el=>{ const h=()=>{ const [i,k]=el.dataset.s.split(','); const s=c.sfx[+i];
+    if (k==='text'||k==='color') s[k]=el.value;
+    else if (k==='font'){ if(el.value) s.font=el.value; else delete s.font; }
+    else s[k]=+el.value;
+    B.querySelectorAll(`[data-s="${i},${k}"]`).forEach(o=>{ if(o!==el) o.value = s[k] ?? ''; });
+  }; el.onchange=h; if(el.type==='range'||el.type==='color') el.oninput=h; });
+  B.querySelectorAll('[data-act]').forEach(el=>el.onclick=()=>{
+    const [act,i]=el.dataset.act.split(','), n=+i, t=r2(vid.currentTime);
+    const mutating = ['in','out','del','add','sort','wdel','sadd','sdel','scenter'].includes(act);
+    if (mutating) snap();
+    if(act==='play'){ vid.currentTime=c.parts[n][0]; vid.play(); }
+    if(act==='in') c.parts[n][0]=Math.min(t,c.parts[n][1]-0.2);
+    if(act==='out') c.parts[n][1]=Math.max(t,c.parts[n][0]+0.2);
+    if(act==='del'){
+      if (c.parts.length<=1){ toast('至少要留一個片段;不要整組的話用上方「刪組」'); return; }
+      c.parts.splice(n,1); S.selPart=Math.min(S.selPart,c.parts.length-1);
+    }
+    if(act==='add') c.parts.push([t, r2(Math.min(t+2,S.dur))]);
+    if(act==='sort') c.parts.sort((a,b)=>a[0]-b[0]);
+    if(act==='wplay'){ vid.currentTime=S.words[n].start; vid.play(); }
+    if(act==='wdel'){ removeWord(S.words[n]); flattenWords(); computeLines(); }
+    if(act==='sadd'){ c.sfx.push({text:'哇！',start:t,end:r2(Math.min(t+1.5,S.dur)),x:0.5,y:0.28,angle:-6,scale:1.2}); S.selSfx=c.sfx.length-1; }
+    if(act==='sdel'){ c.sfx.splice(n,1); S.selSfx=-1; }
+    if(act==='scenter'){ c.sfx[n].x=0.5; S.selSfx=n; toast('已水平置中'); }
+    if(act==='splay'){ vid.currentTime=Math.max(0,c.sfx[n].start-0.3); vid.play(); }
+    renderPanel();
+  });
+}
+function removeWord(w){
+  for (const seg of S.data.transcript.segments){
+    const k = seg.words.indexOf(w); if(k>=0){ seg.words.splice(k,1); return; }
+  }
+}
+$('#undobtn').onclick = undo;
+$('#redobtn').onclick = redoFn;
+$('#clipadd').onclick = ()=>{
+  snap();
+  const t = r2(vid.currentTime);
+  S.data.clips.push({slug:'clip-'+(S.data.clips.length+1), title:'', parts:[[t, r2(Math.min(t+5,S.dur||t+5))]], sfx:[]});
+  S.ci = S.data.clips.length-1; S.selPart=0; S.selSfx=-1;
+  rebuildClipSel(); renderPanel(); toast('已新增片段組');
+};
+$('#clipdel').onclick = ()=>{
+  if (S.data.clips.length<=1){ toast('至少要留一個片段組'); return; }
+  if (!confirm(`刪除片段組「${clip().slug}」?`)) return;
+  snap();
+  S.data.clips.splice(S.ci,1); S.ci=Math.min(S.ci,S.data.clips.length-1); S.selPart=0; S.selSfx=-1;
+  rebuildClipSel(); renderPanel(); toast('已刪除片段組');
+};
+
+// ---------- save / render ----------
+async function save(){
+  const clips = S.data.clips.map(c=>({...c}));
+  await fetch('/api/job/'+S.job+'/clips',{method:'POST',body:JSON.stringify(clips)});
+  await fetch('/api/job/'+S.job+'/transcript',{method:'POST',body:JSON.stringify(S.data.transcript)});
+  toast('已儲存 ✓');
+}
+$('#save').onclick=save;
+async function startRender(){
+  await save();
+  const res = await fetch('/api/render/'+S.job,{method:'POST',body:JSON.stringify({vertical:$('#vert').checked})});
+  if(!res.ok){ toast('渲染啟動失敗'); return; }
+  toast('渲染中…');
+  clearInterval(S.polling);
+  S.polling = setInterval(async ()=>{
+    const st = await (await fetch('/api/render/'+S.job+'/status')).json();
+    if($('#rlog')) $('#rlog').textContent = st.log;
+    if(!st.running){ clearInterval(S.polling); S.data.outputs=st.outputs;
+      toast(st.code===0?'渲染完成 ✓':'渲染失敗,見 log'); if(S.tab==='out') renderPanel(); }
+  },2000);
+}
+
+// ---------- playback ----------
+$('#playbtn').onclick=()=>vid.paused?vid.play():vid.pause();
+vid.ontimeupdate = ()=>{
+  $('#timeinfo').textContent = fmt(vid.currentTime)+' / '+fmt(S.dur);
+  if(!$('#playparts').checked || vid.paused) return;
+  const ps=[...clip().parts].sort((a,b)=>a[0]-b[0]), t=vid.currentTime;
+  if (ps.some(p=>t>=p[0]-0.02&&t<=p[1])) return;
+  const nxt = ps.find(p=>p[0]>t);
+  if (nxt) vid.currentTime=nxt[0]; else vid.pause();
+};
+window.onkeydown = e=>{
+  const k = e.key.toLowerCase();
+  if (e.ctrlKey && k==='z'){ e.preventDefault(); e.shiftKey?redoFn():undo(); return; }
+  if (e.ctrlKey && k==='y'){ e.preventDefault(); redoFn(); return; }
+  if (e.ctrlKey && k==='s'){ e.preventDefault(); save(); return; }
+  if (e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
+  if (e.key==='Delete' && S.selSfx>=0){ snap(); clip().sfx.splice(S.selSfx,1); S.selSfx=-1; renderPanel(); toast('已刪除字幕'); return; }
+  if (e.code==='Space'){ e.preventDefault(); vid.paused?vid.play():vid.pause(); }
+  if (e.key==='ArrowLeft') vid.currentTime-=e.shiftKey?1:0.05;
+  if (e.key==='ArrowRight') vid.currentTime+=e.shiftKey?1:0.05;
+  if (k==='i'&&clip()?.parts[S.selPart]){ snap(); clip().parts[S.selPart][0]=r2(vid.currentTime); renderPanel(); }
+  if (k==='o'&&clip()?.parts[S.selPart]){ snap(); clip().parts[S.selPart][1]=r2(vid.currentTime); renderPanel(); }
+};
+(function loop(){ requestAnimationFrame(loop); if(S.data){ drawOverlay(); drawTl(); } })();
+window.onresize = sizeTl;
+init();
+</script>
+</body>
+</html>

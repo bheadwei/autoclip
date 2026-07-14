@@ -1,0 +1,16 @@
+# 個人影片工作檔(含隱私內容),絕不上傳
+jobs/
+
+# 環境
+.venv/
+__pycache__/
+*.pyc
+
+# 字體(體積大,依 README 指令下載)
+fonts/*.otf
+fonts/*.ttf
+fonts/*.ttc
+fonts/*.zip
+
+# 其他
+*.log
