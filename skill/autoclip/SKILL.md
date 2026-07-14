@@ -63,8 +63,10 @@ cd "<PROJECT_DIR>" && uv run scripts/frames.py "<影片路徑>" "jobs/<名>/shee
 {"video": "<影片絕對路徑>", "vertical": true,
  "style": {"dialog_font": "GenSenRounded2 TW B", "sfx_font": "GenSenRounded2 TW H",
   "dialog_font_file": "GenSenRounded2TW-B.otf", "sfx_font_file": "GenSenRounded2TW-H.otf",
-  "outline": 0, "shadow": 4, "fontsize": 88, "sfx_size": 130}}
+  "outline": 4, "shadow": 2, "fontsize": 88, "sfx_size": 130}}
 ```
+
+預設樣式為**白字+黑外框+陰影**;使用者另有指定(純陰影、不同字體/配色)才覆寫。
 
 樣式依使用者需求調整(外框 vs 陰影、字體、字級);fonts/ 內的字體可用 PIL 查 family name。
 

@@ -171,7 +171,7 @@ async function loadFont(name, file){
 async function loadJob(name){
   S.job = name;
   S.data = await (await fetch('/api/job/'+name)).json();
-  S.style = Object.assign({outline:0, shadow:4}, S.data.job?.style||{});
+  S.style = Object.assign({outline:4, shadow:2}, S.data.job?.style||{});
   S.fonts = {cap:'GSR-B', sfx:'GSR-H'};
   if (S.style.dialog_font_file) S.fonts.cap = (await loadFont('JOBCAP', S.style.dialog_font_file)) || 'GSR-B';
   if (S.style.sfx_font_file) S.fonts.sfx = (await loadFont('JOBSFX', S.style.sfx_font_file)) || 'GSR-H';

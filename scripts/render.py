@@ -30,11 +30,12 @@ MAX_GAP = 0.8         # start a new line after a pause this long (seconds)
 FONTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts")
 
 # Per-job overrides live in jobs/<name>/job.json under "style".
+# Default look: white text + black outline + drop shadow.
 DEFAULT_STYLE = {
     "dialog_font": "GenSenRounded2 TW B",
     "sfx_font": "GenSenRounded2 TW H",
-    "outline": 0,      # px at 1080p; 0 = shadow-only look
-    "shadow": 4,
+    "outline": 4,      # black outline px at PlayResY=1920; 0 = shadow-only look
+    "shadow": 2,
     "fontsize": 88,    # dialog size at PlayResY=1920 (vertical)
     "sfx_size": 130,
 }

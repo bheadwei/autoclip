@@ -8,10 +8,21 @@
                                    網頁編輯器微調(拖時間軸、改字幕、狀聲詞拖拉定位)
 ```
 
+## 🚀 不會寫程式?最簡單的用法
+
+1. 安裝 [Claude Code](https://claude.com/claude-code)(桌面版 App 即可)
+2. 開新對話,直接跟 Claude 說:
+
+   > 幫我安裝這個工具:https://github.com/bheadwei/autoclip ,照 README 把環境、字體、skill 都裝好
+
+3. 裝好之後,丟影片給 Claude 說「**幫我剪這支,主題是…**」就會拿到成品;想微調就說「**開編輯器**」
+
+下面的手動安裝步驟看不懂沒關係,全部都可以叫 Claude 代勞。
+
 ## 特色
 
 - **AI 選段**:搭配 [Claude Code](https://claude.com/claude-code) 使用,AI 同時分析畫面(keyframe 拼圖)和逐字稿,找出有 hook、敘事完整的片段,支援多片段串接
-- **逐字級字幕**:faster-whisper 轉錄含逐字時間碼,可做卡拉OK效果;純 CPU 可跑,不需要 GPU
+- **逐字級字幕**:faster-whisper 轉錄含逐字時間碼,字幕與語音精準對齊;純 CPU 可跑,不需要 GPU。預設樣式:白字+黑外框+陰影
 - **狀聲詞/字卡系統**:任意文字、顏色、字體、角度、大小,彈出動畫,`\N` 換行
 - **網頁編輯器**:時間軸拖拉剪輯、字幕直接在畫面上拖曳(中線自動吸附)、每條字幕獨立字體/顏色、Ctrl+Z 復原、一鍵渲染
 - **隱私設計**:工作流程內建「掃描逐字稿中的人名並剪除」步驟
@@ -86,12 +97,18 @@ uv run scripts/render.py "video.mp4" jobs/myclip/transcript.json jobs/myclip/cli
     "sfx_font": "GenSenRounded2 TW H",
     "dialog_font_file": "GenSenRounded2TW-B.otf",
     "sfx_font_file": "GenSenRounded2TW-H.otf",
-    "outline": 0, "shadow": 4, "fontsize": 88, "sfx_size": 130
+    "outline": 4, "shadow": 2, "fontsize": 88, "sfx_size": 130
   }
 }
 ```
 
-`outline`(黑外框)/`shadow`(陰影)擇一或並用;想加新字體把 .otf/.ttf 丟進 `fonts/` 再重啟編輯器。
+不寫 `style` 就用預設:白字+黑外框(`outline: 4`)+陰影(`shadow: 2`)。
+
+## 新增字體
+
+**方法一(拖檔案)**:把字體檔(`.otf` / `.ttf`)直接丟進 `fonts/` 資料夾 → 重啟編輯器 → 字幕的字體下拉選單就會出現。只能用有授權的字體(免費商用推薦[思源系字型](https://github.com/ButTaiwan/gensen-font)家族)。
+
+**方法二(叫 Claude)**:跟 Claude Code 說「**幫我加〇〇字體**」(例如源石黑體、粉圓體),它會自己找開源載點下載進 `fonts/`、確認字體名稱、幫你設好。
 
 ## 致謝
 
